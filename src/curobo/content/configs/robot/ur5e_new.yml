@@ -1,0 +1,108 @@
+robot_cfg:
+  kinematics:
+    usd_path: "robot/ur_description/ur5e_new.usd"  # wt
+    usd_robot_root: "/robot"
+    isaac_usd_path: ""
+    usd_flip_joints: {}
+    usd_flip_joint_limits: []
+
+    urdf_path: "robot/ur_description/ur5e.urdf"  # wt
+    asset_root_path: "robot/ur_description"      # wt
+
+    base_link: "base_link"  # wt
+    ee_link: "tool0"        # wt
+    link_names: null
+    lock_joints: null # Do not want to plan for the grippers joints
+    extra_links: null
+
+
+    collision_link_names:  # wt 
+      ['shoulder_link','upper_arm_link', 'forearm_link', 'wrist_1_link', 'wrist_2_link' ,'wrist_3_link'] # wt 
+    collision_spheres: # wt
+      shoulder_link:
+        - "center": [-0.0, -0.004, 0.0]
+          "radius": 0.088
+        - "center": [0.001, -0.018, -0.006]
+          "radius": 0.086
+        - "center": [-0.003, -0.024, 0.016]
+          "radius": 0.08
+      upper_arm_link:
+        - "center": [-0.416, -0.0, 0.143]
+          "radius": 0.088
+        - "center": [-0.015, 0.0, 0.134]
+          "radius": 0.087
+        - "center": [-0.14, 0.0, 0.138]
+          "radius": 0.072
+        - "center": [-0.285, -0.001, 0.139]
+          "radius": 0.071
+        - "center": [-0.376, 0.001, 0.138]
+          "radius": 0.087
+        - "center": [-0.222, 0.001, 0.139]
+          "radius": 0.071
+        - "center": [-0.055, 0.008, 0.14]
+          "radius": 0.08
+        - "center": [-0.001, -0.002, 0.143]
+          "radius": 0.086
+      forearm_link:
+        - "center": [-0.01, 0.002, 0.031]
+          "radius": 0.082
+        - "center": [-0.387, 0.0, 0.014]
+          "radius": 0.067
+        - "center": [-0.121, -0.0, 0.006]
+          "radius": 0.067
+        - "center": [-0.206, 0.001, 0.007]
+          "radius": 0.067
+        - "center": [-0.312, -0.001, 0.006]
+          "radius": 0.066
+        - "center": [-0.057, 0.003, 0.008]
+          "radius": 0.075
+        - "center": [-0.266, 0.0, 0.006]
+          "radius": 0.067
+        - "center": [-0.397, -0.001, -0.018]
+          "radius": 0.062
+      wrist_1_link:
+        - "center": [-0.0, 0.0, -0.009]
+          "radius": 0.067
+        - "center": [-0.0, 0.0, -0.052]
+          "radius": 0.067
+        - "center": [-0.002, 0.021, -0.001]
+          "radius": 0.065
+      wrist_2_link:
+        - "center": [0.0, -0.01, -0.001]
+          "radius": 0.067
+        - "center": [0.0, 0.008, -0.001]
+          "radius": 0.067
+      wrist_3_link:
+        - "center": [-0.0, 0.004, -0.04]
+          "radius": 0.053
+        - "center": [0.005, 0.001, -0.039]
+          "radius": 0.052 
+
+
+    collision_sphere_buffer: 0.005
+    extra_collision_spheres: {}
+    self_collision_ignore: {
+      "upper_arm_link": ["forearm_link", "shoulder_link"],
+      "forearm_link": ["wrist_1_link", "upper_arm_link"],
+      "wrist_1_link": ["wrist_2_link", "forearm_link"],
+      "wrist_2_link": ["wrist_3_link", "wrist_1_link"]
+    }  # wt 
+    self_collision_buffer: {
+      'upper_arm_link': 0, 
+      'forearm_link': 0, 
+      'wrist_1_link': 0, 
+      'wrist_2_link': 0,
+      'wrist_3_link' : 0,
+    } # wt TODO
+
+    use_global_cumul: True
+    mesh_link_names: null # List[str]
+
+    cspace:
+        joint_names: # wt 
+          ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', 'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint'] # wt
+        retract_config:  [-1.57, -2.2, 1.9, -1.383, -1.57, 0.00] # wt 
+        null_space_weight:  [1.0, 1.0, 1.0, 1.0, 1.0, 1.0] # wt 
+        cspace_distance_weight: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0] # wt 
+        max_jerk: 500.0
+        max_acceleration: 15.0

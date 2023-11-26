@@ -201,3 +201,5 @@ nvidia_curobo*/
 *tfevents*
 
 *.csv
+
+log_install.txt
