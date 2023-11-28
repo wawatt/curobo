@@ -35,14 +35,14 @@ pip install urdfpy
 
 # install in Issac Sim on windows OS
 ```
-C:/Users/XXX/AppData/Local/ov/pkg/isaac_sim-2022.2.1/python.bat -m pip install tomli wheel usd-core==23.8 cloudpickle farama-notifications jax-jumpy
+C:/Users/XXX/AppData/Local/ov/pkg/isaac_sim-2022.2.1/python.bat -m pip install tomli wheel
 C:/Users/XXX/AppData/Local/ov/pkg/isaac_sim-2022.2.1/python.bat -m pip install -e .[isaac_sim] --no-build-isolation --log log_install.txt
 ```
 
 # make yaml 
 1. gen usd file
 ```
-C:/Users/XXX/AppData/Local/ov/pkg/isaac_sim-2023.1.0-hotfix.1/python.bat examples/isaac_sim/util/convert_urdf_to_usd.py --robot ur5e_new.yml --save_usd
+C:/Users/XXX/AppData/Local/ov/pkg/isaac_sim-2022.2.1/python.bat examples/isaac_sim/util/convert_urdf_to_usd.py --robot ur5e_new.yml --save_usd
 ```
 
 2. open usd file with Issac Sim src\curobo\content\assets\robot\ur_description.ur5e_new.usd
