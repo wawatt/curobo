@@ -40,6 +40,7 @@ python -m pytest .
 C:/Users/XXX/AppData/Local/ov/pkg/isaac_sim-2023.1.0-hotfix.1/python.bat -m pip install tomli wheel  (maybe)
 C:/Users/XXX/AppData/Local/ov/pkg/isaac_sim-2023.1.0-hotfix.1/python.bat -m pip install -e .[isaac_sim] --no-build-isolation --log log_install.txt
 ```
+Don't worry about WARNING and pip's dependency errors
 
 ## demos
 1. generate usd file
