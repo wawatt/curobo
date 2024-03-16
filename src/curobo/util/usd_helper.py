@@ -16,7 +16,6 @@ from typing import Dict, List, Optional, Union
 # Third Party
 import numpy as np
 import torch
-from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics, UsdShade
 from tqdm import tqdm
 
 # CuRobo
@@ -49,6 +48,15 @@ from curobo.wrap.reacher.motion_gen import MotionGenResult
 
 def join_tree(path1, path2):
     return path1+"/"+path2
+try:
+    # Third Party
+    from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics, UsdShade
+except ImportError:
+    raise ImportError(
+        "usd-core failed to import, install with pip install usd-core"
+        + " NOTE: Do not install this if using with ISAAC SIM."
+    )
+
 
 def set_prim_translate(prim, translation):
     UsdGeom.Xformable(prim).AddTranslateOp().Set(Gf.Vec3d(translation))

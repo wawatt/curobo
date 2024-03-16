@@ -30,7 +30,7 @@ from curobo.cuda_robot_model.types import (
     SelfCollisionKinematicsConfig,
 )
 from curobo.curobolib.kinematics import get_cuda_kinematics
-from curobo.geom.types import Sphere
+from curobo.geom.types import Mesh, Sphere
 from curobo.types.base import TensorDeviceType
 from curobo.types.math import Pose
 from curobo.util.logger import log_error
@@ -264,7 +264,7 @@ class CudaRobotModel(CudaRobotModelConfig):
         pose = self.get_link_poses(q, self.kinematics_config.mesh_link_names)
         for li, l in enumerate(self.kinematics_config.mesh_link_names):
             m_list[li].pose = (
-                Pose.from_list(m_list[li].pose).multiply(pose.get_index(0, li)).tolist()
+                pose.get_index(0, li).multiply(Pose.from_list(m_list[li].pose)).tolist()
             )
 
         return m_list
@@ -390,4 +390,8 @@ class CudaRobotModel(CudaRobotModelConfig):
         return self.kinematics_config.base_link
 
     def update_kinematics_config(self, new_kin_config: KinematicsTensorConfig):
-        self.kinematics_config.copy(new_kin_config)
+        self.kinematics_config.copy_(new_kin_config)
+
+    @property
+    def retract_config(self):
+        return self.kinematics_config.cspace.retract_config

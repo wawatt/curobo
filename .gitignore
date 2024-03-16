@@ -203,3 +203,4 @@ nvidia_curobo*/
 *.csv
 
 log_install.txt
+docs/*
