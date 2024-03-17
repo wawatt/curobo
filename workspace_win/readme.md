@@ -37,17 +37,19 @@ python -m pytest .
 
 ## install in isaac_sim-2023.1.0-hotfix.1
 1. install cuda11.8
-2. run
+2. restart NVIDIA Omniverse, after installation, CUDA_HOME will be detected automatically.
+3. run
     ```
+    set TORCH_CUDA_ARCH_LIST=8.6+PTX // for RTX 4060ti
     C:/Users/XXX/AppData/Local/ov/pkg/isaac_sim-2023.1.0-hotfix.1/python.bat -m pip install tomli wheel  (maybe)
-    C:/Users/XXX/AppData/Local/ov/pkg/isaac_sim-2023.1.0-hotfix.1/python.bat -m pip install -e .[isaac_sim] --no-build-isolation --log log_install.txt
+    C:/Users/XXX/AppData/Local/ov/pkg/isaac_sim-2023.1.0-hotfix.1/python.bat -m pip install -e .[isaacsim] --no-build-isolation --log log_install.txt
     ```
     Don't worry about WARNING and pip's dependency errors
 
 ## demos
 1. generate usd file
     ```
-    C:/Users/XXX/AppData/Local/ov/pkg/isaac_sim-2023.1.0-hotfix.1/python.bat examples/isaac_sim/util/convert_urdf_to_usd.py --robot ur5e_new.yml --save_usd
+    C:/Users/XXX/AppData/Local/ov/pkg/isaac_sim-2023.1.0-hotfix.1/python.bat examples/isaac_sim/util/convert_urdf_to_usd.py --robot step.yml --save_usd
     ```
 2. open usd file with Issac Sim src\curobo\content\assets\robot\ur_description.ur5e_new.usd
    

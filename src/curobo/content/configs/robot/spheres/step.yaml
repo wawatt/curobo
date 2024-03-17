@@ -1,0 +1,400 @@
+# The robot description defines the generalized coordinates and how to map those
+# to the underlying URDF dofs.
+
+api_version: 1.0
+
+# Defines the generalized coordinates. Each generalized coordinate is assumed
+# to have an entry in the URDF.
+# Lula will only use these joints to control the robot position.
+cspace:
+    - joint_1
+    - joint_2
+    - joint_3
+    - joint_4
+    - joint_5
+    - joint_6
+default_q: [
+    0.0,0.0013,0.0012,0.0,0.0002,0.0
+]
+
+# Most dimensions of the cspace have a direct corresponding element
+# in the URDF. This list of rules defines how unspecified coordinates
+# should be extracted or how values in the URDF should be overwritten.
+
+cspace_to_urdf_rules:
+
+# Lula uses collision spheres to define the robot geometry in order to avoid
+# collisions with external obstacles.  If no spheres are specified, Lula will
+# not be able to avoid obstacles.
+
+collision_spheres:
+  - base_link:
+    - "center": [-0.003, -0.012, 0.189]
+      "radius": 0.282
+    - "center": [-0.305, 0.003, 0.092]
+      "radius": 0.187
+    - "center": [0.017, 0.027, 0.182]
+      "radius": 0.275
+    - "center": [-0.241, 0.071, 0.093]
+      "radius": 0.187
+    - "center": [-0.225, -0.1, 0.08]
+      "radius": 0.175
+    - "center": [-0.334, -0.073, 0.087]
+      "radius": 0.181
+    - "center": [-0.346, 0.106, 0.074]
+      "radius": 0.169
+    - "center": [0.067, -0.079, 0.118]
+      "radius": 0.211
+    - "center": [-0.051, 0.085, 0.122]
+      "radius": 0.214
+    - "center": [0.123, 0.026, 0.099]
+      "radius": 0.192
+    - "center": [-0.084, -0.127, 0.079]
+      "radius": 0.171
+    - "center": [-0.045, -0.007, 0.205]
+      "radius": 0.259
+    - "center": [0.011, 0.03, 0.198]
+      "radius": 0.273
+    - "center": [0.066, 0.143, 0.074]
+      "radius": 0.167
+    - "center": [0.049, -0.16, 0.067]
+      "radius": 0.16
+    - "center": [-0.104, -0.026, 0.124]
+      "radius": 0.217
+    - "center": [0.092, 0.028, 0.266]
+      "radius": 0.198
+    - "center": [-0.042, 0.155, 0.072]
+      "radius": 0.165
+    - "center": [-0.042, 0.076, 0.27]
+      "radius": 0.2
+    - "center": [0.127, -0.081, 0.079]
+      "radius": 0.172
+  - link_1:
+    - "center": [0.154, 0.03, 0.213]
+      "radius": 0.246
+    - "center": [0.052, 0.034, 0.158]
+      "radius": 0.238
+    - "center": [0.262, -0.008, 0.263]
+      "radius": 0.204
+    - "center": [0.044, 0.075, 0.278]
+      "radius": 0.196
+    - "center": [0.141, 0.003, 0.129]
+      "radius": 0.22
+    - "center": [0.237, 0.078, 0.246]
+      "radius": 0.199
+    - "center": [-0.06, 0.025, 0.102]
+      "radius": 0.161
+    - "center": [0.175, -0.012, 0.289]
+      "radius": 0.2
+    - "center": [-0.016, -0.074, 0.081]
+      "radius": 0.143
+    - "center": [0.252, -0.085, 0.104]
+      "radius": 0.127
+    - "center": [0.251, -0.086, 0.374]
+      "radius": 0.123
+    - "center": [0.123, 0.037, 0.245]
+      "radius": 0.238
+    - "center": [0.183, -0.003, 0.056]
+      "radius": 0.161
+    - "center": [0.348, -0.093, 0.285]
+      "radius": 0.116
+    - "center": [0.007, 0.098, 0.297]
+      "radius": 0.165
+    - "center": [-0.122, 0.009, 0.066]
+      "radius": 0.117
+    - "center": [0.134, 0.171, 0.357]
+      "radius": 0.103
+    - "center": [0.071, -0.088, 0.062]
+      "radius": 0.134
+    - "center": [0.277, 0.14, 0.292]
+      "radius": 0.136
+    - "center": [0.348, -0.106, 0.212]
+      "radius": 0.103
+    - "center": [-0.006, 0.165, 0.364]
+      "radius": 0.102
+    - "center": [0.236, 0.11, 0.186]
+      "radius": 0.162
+    - "center": [0.025, 0.084, 0.127]
+      "radius": 0.186
+    - "center": [0.221, -0.002, 0.213]
+      "radius": 0.212
+    - "center": [-0.11, -0.073, 0.055]
+      "radius": 0.093
+    - "center": [0.088, 0.016, 0.147]
+      "radius": 0.237
+    - "center": [0.016, 0.067, 0.227]
+      "radius": 0.193
+    - "center": [0.305, -0.095, 0.346]
+      "radius": 0.114
+    - "center": [0.22, 0.167, 0.328]
+      "radius": 0.11
+    - "center": [0.31, -0.119, 0.133]
+      "radius": 0.093
+    - "center": [-0.032, 0.099, 0.08]
+      "radius": 0.134
+    - "center": [0.306, 0.172, 0.233]
+      "radius": 0.105
+    - "center": [0.064, 0.143, 0.342]
+      "radius": 0.127
+    - "center": [0.105, -0.025, 0.242]
+      "radius": 0.19
+    - "center": [0.207, -0.004, -0.022]
+      "radius": 0.098
+    - "center": [-0.052, -0.11, 0.054]
+      "radius": 0.102
+    - "center": [0.032, -0.026, 0.117]
+      "radius": 0.195
+    - "center": [0.168, 0.019, 0.182]
+      "radius": 0.236
+    - "center": [0.296, 0.076, 0.293]
+      "radius": 0.146
+    - "center": [0.057, 0.033, 0.226]
+      "radius": 0.216
+  - link_2:
+    - "center": [0.01, -0.071, 0.294]
+      "radius": 0.134
+    - "center": [0.016, -0.077, 0.499]
+      "radius": 0.129
+    - "center": [0.011, -0.082, 0.697]
+      "radius": 0.123
+    - "center": [-0.031, -0.06, 0.117]
+      "radius": 0.123
+    - "center": [0.062, -0.062, 0.144]
+      "radius": 0.124
+    - "center": [0.06, -0.057, -0.01]
+      "radius": 0.107
+    - "center": [-0.031, -0.076, 0.423]
+      "radius": 0.13
+    - "center": [-0.068, -0.057, -0.011]
+      "radius": 0.107
+    - "center": [-0.045, -0.071, 0.264]
+      "radius": 0.131
+    - "center": [-0.023, -0.082, 0.582]
+      "radius": 0.124
+    - "center": [-0.035, -0.074, 0.82]
+      "radius": 0.097
+    - "center": [0.036, -0.074, 0.394]
+      "radius": 0.131
+    - "center": [0.054, -0.075, 0.803]
+      "radius": 0.099
+    - "center": [0.032, -0.052, -0.089]
+      "radius": 0.097
+    - "center": [0.042, -0.074, 0.589]
+      "radius": 0.117
+    - "center": [0.046, -0.071, 0.272]
+      "radius": 0.131
+    - "center": [-0.056, -0.062, 0.154]
+      "radius": 0.126
+    - "center": [0.071, -0.061, 0.071]
+      "radius": 0.116
+    - "center": [0.029, -0.07, 0.884]
+      "radius": 0.084
+    - "center": [-0.041, -0.078, 0.719]
+      "radius": 0.108
+    - "center": [-0.04, -0.049, -0.089]
+      "radius": 0.093
+    - "center": [-0.074, -0.058, 0.031]
+      "radius": 0.112
+    - "center": [-0.054, -0.073, 0.877]
+      "radius": 0.082
+    - "center": [-0.042, -0.073, 0.356]
+      "radius": 0.128
+    - "center": [0.086, -0.052, -0.029]
+      "radius": 0.1
+    - "center": [0.057, -0.067, 0.207]
+      "radius": 0.127
+    - "center": [-0.035, -0.078, 0.633]
+      "radius": 0.116
+    - "center": [0.052, -0.072, 0.498]
+      "radius": 0.117
+    - "center": [0.083, -0.058, 0.711]
+      "radius": 0.084
+    - "center": [-0.029, -0.077, 0.475]
+      "radius": 0.128
+    - "center": [0.057, -0.069, 0.323]
+      "radius": 0.124
+    - "center": [-0.018, -0.057, 0.027]
+      "radius": 0.112
+    - "center": [-0.077, -0.05, -0.056]
+      "radius": 0.097
+    - "center": [0.056, -0.072, 0.65]
+      "radius": 0.107
+    - "center": [-0.017, -0.067, 0.916]
+      "radius": 0.076
+    - "center": [0.069, -0.07, 0.863]
+      "radius": 0.084
+    - "center": [0.035, -0.077, 0.766]
+      "radius": 0.109
+    - "center": [0.069, -0.054, -0.056]
+      "radius": 0.101
+    - "center": [-0.019, -0.062, 0.192]
+      "radius": 0.131
+    - "center": [0.075, -0.059, 0.393]
+      "radius": 0.104
+  - link_3:
+    - "center": [0.059, 0.205, 0.111]
+      "radius": 0.195
+    - "center": [0.016, 0.129, 0.007]
+      "radius": 0.159
+    - "center": [0.041, 0.263, 0.045]
+      "radius": 0.165
+    - "center": [0.105, 0.222, 0.147]
+      "radius": 0.177
+    - "center": [0.006, 0.244, 0.165]
+      "radius": 0.153
+    - "center": [0.023, 0.267, -0.041]
+      "radius": 0.12
+    - "center": [0.036, 0.146, 0.052]
+      "radius": 0.176
+    - "center": [0.11, 0.192, 0.157]
+      "radius": 0.169
+    - "center": [0.007, 0.21, -0.086]
+      "radius": 0.099
+    - "center": [0.018, 0.315, 0.01]
+      "radius": 0.124
+    - "center": [0.007, 0.103, -0.028]
+      "radius": 0.133
+    - "center": [0.134, 0.271, 0.207]
+      "radius": 0.118
+    - "center": [-0.04, 0.279, 0.207]
+      "radius": 0.107
+    - "center": [0.112, 0.113, 0.063]
+      "radius": 0.121
+    - "center": [-0.027, 0.311, 0.117]
+      "radius": 0.102
+    - "center": [-0.061, 0.052, 0.002]
+      "radius": 0.082
+    - "center": [0.068, 0.081, -0.011]
+      "radius": 0.111
+    - "center": [0.002, 0.13, 0.072]
+      "radius": 0.147
+    - "center": [0.133, 0.165, 0.199]
+      "radius": 0.128
+    - "center": [0.007, 0.288, -0.119]
+      "radius": 0.07
+  - link_4:
+    - "center": [0.242, -0.001, -0.009]
+      "radius": 0.131
+    - "center": [0.453, 0.006, -0.006]
+      "radius": 0.128
+    - "center": [0.637, -0.037, -0.003]
+      "radius": 0.126
+    - "center": [0.818, -0.029, 0.0]
+      "radius": 0.124
+    - "center": [0.104, 0.001, -0.012]
+      "radius": 0.121
+    - "center": [0.746, 0.027, -0.001]
+      "radius": 0.124
+    - "center": [0.342, 0.008, -0.008]
+      "radius": 0.13
+    - "center": [0.571, 0.029, -0.004]
+      "radius": 0.126
+    - "center": [0.521, -0.037, -0.002]
+      "radius": 0.126
+    - "center": [0.82, 0.031, 0.0]
+      "radius": 0.123
+    - "center": [0.759, -0.04, -0.001]
+      "radius": 0.125
+    - "center": [0.426, -0.032, -0.013]
+      "radius": 0.124
+    - "center": [0.177, -0.004, -0.005]
+      "radius": 0.127
+    - "center": [0.069, -0.006, 0.018]
+      "radius": 0.104
+    - "center": [0.679, 0.051, -0.019]
+      "radius": 0.108
+    - "center": [0.301, -0.016, -0.007]
+      "radius": 0.129
+    - "center": [0.463, 0.036, -0.018]
+      "radius": 0.116
+    - "center": [0.064, -0.001, -0.037]
+      "radius": 0.099
+    - "center": [0.669, 0.059, 0.022]
+      "radius": 0.1
+    - "center": [0.399, 0.022, -0.005]
+      "radius": 0.126
+    - "center": [0.831, -0.054, -0.005]
+      "radius": 0.112
+    - "center": [0.706, -0.045, 0.003]
+      "radius": 0.121
+    - "center": [0.14, 0.016, 0.007]
+      "radius": 0.114
+    - "center": [0.419, -0.04, 0.008]
+      "radius": 0.115
+    - "center": [0.521, 0.053, 0.019]
+      "radius": 0.103
+    - "center": [0.32, 0.023, 0.003]
+      "radius": 0.119
+    - "center": [0.359, -0.023, -0.011]
+      "radius": 0.127
+    - "center": [0.121, -0.01, 0.001]
+      "radius": 0.121
+    - "center": [0.757, 0.059, 0.022]
+      "radius": 0.1
+    - "center": [0.832, 0.05, 0.008]
+      "radius": 0.109
+  - link_5:
+    - "center": [0.01, 0.105, 0.001]
+      "radius": 0.1
+    - "center": [0.142, 0.083, -0.0]
+      "radius": 0.074
+    - "center": [0.01, 0.074, 0.007]
+      "radius": 0.094
+    - "center": [0.075, 0.115, -0.007]
+      "radius": 0.082
+    - "center": [0.003, 0.055, -0.035]
+      "radius": 0.075
+    - "center": [-0.032, 0.123, -0.029]
+      "radius": 0.071
+    - "center": [-0.024, 0.121, 0.039]
+      "radius": 0.071
+    - "center": [0.099, 0.115, 0.012]
+      "radius": 0.076
+    - "center": [-0.043, 0.04, 0.011]
+      "radius": 0.059
+    - "center": [0.136, 0.054, -0.017]
+      "radius": 0.061
+    - "center": [0.142, 0.083, 0.013]
+      "radius": 0.074
+    - "center": [0.002, 0.058, 0.032]
+      "radius": 0.078
+    - "center": [0.008, 0.11, -0.019]
+      "radius": 0.091
+    - "center": [-0.05, 0.127, -0.002]
+      "radius": 0.064
+    - "center": [0.028, 0.126, 0.039]
+      "radius": 0.069
+    - "center": [0.152, 0.101, -0.01]
+      "radius": 0.064
+    - "center": [0.13, 0.051, 0.022]
+      "radius": 0.056
+    - "center": [0.114, 0.08, -0.039]
+      "radius": 0.055
+    - "center": [-0.039, 0.049, 0.044]
+      "radius": 0.056
+    - "center": [-0.069, 0.041, -0.016]
+      "radius": 0.044
+  - link_6:
+    - "center": [-0.014, -0.01, 0.032]
+      "radius": 0.033
+    - "center": [-0.014, 0.027, -0.017]
+      "radius": 0.033
+    - "center": [-0.014, -0.028, -0.023]
+      "radius": 0.033
+    - "center": [-0.014, -0.035, 0.017]
+      "radius": 0.033
+    - "center": [-0.014, 0.02, 0.018]
+      "radius": 0.033
+    - "center": [-0.014, -0.004, -0.0]
+      "radius": 0.033
+    - "center": [-0.014, -0.005, -0.039]
+      "radius": 0.033
+    - "center": [-0.014, 0.049, -0.0]
+      "radius": 0.033
+    - "center": [-0.014, 0.011, 0.048]
+      "radius": 0.033
+    - "center": [-0.014, 0.019, -0.044]
+      "radius": 0.033
+  - sensor_link:
+    - "center": [0.054, -0.018, 0.141]
+      "radius": 0.127
