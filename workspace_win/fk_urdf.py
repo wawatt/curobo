@@ -31,7 +31,7 @@ kin_model = CudaRobotModel(robot_cfg.kinematics)
 
 # compute forward kinematics:
 # torch random sampling might give values out of joint limits
-q = torch.rand((10, kin_model.get_dof()), **vars(tensor_args))
+q = torch.rand((10, kin_model.get_dof()), **(tensor_args.as_torch_dict()))
 out = kin_model.get_state(q)
 ee_pose = torch.cat([out.ee_position, out.ee_quaternion], dim=-1).cpu().numpy()
 
