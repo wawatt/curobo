@@ -12,8 +12,11 @@
 # Third Party
 import torch
 
+# CuRobo
+from curobo.util.torch_utils import get_torch_jit_decorator
 
-@torch.jit.script
+
+@get_torch_jit_decorator()
 def project_depth_to_pointcloud(depth_image: torch.Tensor, intrinsics_matrix: torch.Tensor):
     """Projects numpy depth image to point cloud.
 
@@ -43,8 +46,10 @@ def project_depth_to_pointcloud(depth_image: torch.Tensor, intrinsics_matrix: to
     return raw_pc
 
 
-@torch.jit.script
-def get_projection_rays(height: int, width: int, intrinsics_matrix: torch.Tensor):
+@get_torch_jit_decorator()
+def get_projection_rays(
+    height: int, width: int, intrinsics_matrix: torch.Tensor, depth_to_meter: float = 0.001
+):
     """Projects numpy depth image to point cloud.
 
     Args:
@@ -54,10 +59,10 @@ def get_projection_rays(height: int, width: int, intrinsics_matrix: torch.Tensor
     Returns:
       array of float (h, w, 3)
     """
-    fx = intrinsics_matrix[:, 0, 0]
-    fy = intrinsics_matrix[:, 1, 1]
-    cx = intrinsics_matrix[:, 0, 2]
-    cy = intrinsics_matrix[:, 1, 2]
+    fx = intrinsics_matrix[:, 0:1, 0:1]
+    fy = intrinsics_matrix[:, 1:2, 1:2]
+    cx = intrinsics_matrix[:, 0:1, 2:3]
+    cy = intrinsics_matrix[:, 1:2, 2:3]
 
     input_x = torch.arange(width, dtype=torch.float32, device=intrinsics_matrix.device)
     input_y = torch.arange(height, dtype=torch.float32, device=intrinsics_matrix.device)
@@ -73,18 +78,17 @@ def get_projection_rays(height: int, width: int, intrinsics_matrix: torch.Tensor
         device=intrinsics_matrix.device,
         dtype=torch.float32,
     )
-
     output_x = (input_x - cx) / fx
     output_y = (input_y - cy) / fy
 
     rays = torch.stack([output_x, output_y, input_z], -1).reshape(
         intrinsics_matrix.shape[0], width * height, 3
     )
-    rays = rays * (1.0 / 1000.0)
+    rays = rays * depth_to_meter
     return rays
 
 
-@torch.jit.script
+@get_torch_jit_decorator()
 def project_pointcloud_to_depth(
     pointcloud: torch.Tensor,
     output_image: torch.Tensor,
@@ -106,7 +110,7 @@ def project_pointcloud_to_depth(
     return output_image
 
 
-@torch.jit.script
+@get_torch_jit_decorator()
 def project_depth_using_rays(
     depth_image: torch.Tensor, rays: torch.Tensor, filter_origin: bool = False
 ):

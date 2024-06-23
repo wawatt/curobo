@@ -12,7 +12,7 @@ from __future__ import annotations
 
 # Standard Library
 from dataclasses import dataclass
-from typing import List, Optional, Sequence
+from typing import List, Optional, Sequence, Union
 
 # Third Party
 import numpy as np
@@ -35,6 +35,7 @@ from curobo.types.base import TensorDeviceType
 from curobo.util.helpers import list_idx_if_not_none
 from curobo.util.logger import log_error, log_info, log_warn
 from curobo.util.tensor_util import clone_if_not_none, copy_tensor
+from curobo.util.torch_utils import get_torch_jit_decorator
 
 # Local Folder
 from .tensor import T_BPosition, T_BQuaternion, T_BRotation
@@ -260,11 +261,19 @@ class Pose(Sequence):
             position=clone_if_not_none(self.position),
             quaternion=clone_if_not_none(self.quaternion),
             normalize_rotation=False,
-            # rotation=clone_if_not_none(self.rotation),
         )
 
-    def to(self, tensor_args: TensorDeviceType):
-        t_type = vars(tensor_args)
+    def to(
+        self,
+        tensor_args: Optional[TensorDeviceType] = None,
+        device: Optional[torch.device] = None,
+    ):
+        if tensor_args is None and device is None:
+            log_error("Pose.to() requires tensor_args or device")
+        if tensor_args is not None:
+            t_type = tensor_args.as_torch_dict()
+        else:
+            t_type = {"device": device}
         if self.position is not None:
             self.position = self.position.to(**t_type)
         if self.quaternion is not None:
@@ -338,7 +347,7 @@ class Pose(Sequence):
         return p_distance, quat_distance
 
     def angular_distance(self, other_pose: Pose, use_phi3: bool = False):
-        """This function computes the angular distance \phi_3.
+        """This function computes the angular distance phi_3.
 
         See Huynh, Du Q. "Metrics for 3D rotations: Comparison and analysis." Journal of Mathematical
         Imaging and Vision 35 (2009): 155-164.
@@ -442,6 +451,13 @@ class Pose(Sequence):
     def compute_local_pose(self, world_pose: Pose) -> Pose:
         return self.inverse().multiply(world_pose)
 
+    def contiguous(self) -> Pose:
+        return Pose(
+            position=self.position.contiguous() if self.position is not None else None,
+            quaternion=self.quaternion.contiguous() if self.quaternion is not None else None,
+            normalize_rotation=False,
+        )
+
 
 def quat_multiply(q1, q2, q_res):
     a_w = q1[..., 0]
@@ -461,9 +477,9 @@ def quat_multiply(q1, q2, q_res):
     return q_res
 
 
-@torch.jit.script
+@get_torch_jit_decorator()
 def angular_distance_phi3(goal_quat, current_quat):
-    """This function computes the angular distance \phi_3.
+    """This function computes the angular distance phi_3.
 
     See Huynh, Du Q. "Metrics for 3D rotations: Comparison and analysis." Journal of Mathematical
     Imaging and Vision 35 (2009): 155-164.
@@ -524,7 +540,7 @@ class OrientationError(Function):
         return None, grad_mul, None
 
 
-@torch.jit.script
+@get_torch_jit_decorator()
 def normalize_quaternion(in_quaternion: torch.Tensor) -> torch.Tensor:
     k = torch.sign(in_quaternion[..., 0:1])
     # NOTE: torch sign returns 0 as sign value when value is 0.0

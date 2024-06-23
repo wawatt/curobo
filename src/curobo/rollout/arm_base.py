@@ -40,7 +40,7 @@ from curobo.types.base import TensorDeviceType
 from curobo.types.robot import CSpaceConfig, RobotConfig
 from curobo.types.state import JointState
 from curobo.util.logger import log_error, log_info, log_warn
-from curobo.util.tensor_util import cat_sum
+from curobo.util.tensor_util import cat_sum, cat_sum_horizon
 
 
 @dataclass
@@ -104,10 +104,10 @@ class ArmCostConfig:
 
 @dataclass
 class ArmBaseConfig(RolloutConfig):
-    model_cfg: KinematicModelConfig
-    cost_cfg: ArmCostConfig
-    constraint_cfg: ArmCostConfig
-    convergence_cfg: ArmCostConfig
+    model_cfg: Optional[KinematicModelConfig] = None
+    cost_cfg: Optional[ArmCostConfig] = None
+    constraint_cfg: Optional[ArmCostConfig] = None
+    convergence_cfg: Optional[ArmCostConfig] = None
     world_coll_checker: Optional[WorldCollision] = None
 
     @staticmethod
@@ -261,7 +261,7 @@ class ArmBase(RolloutBase, ArmBaseConfig):
                 log_warn(
                     "null space cost is deprecated, use null_space_weight in bound cost instead"
                 )
-
+            self.cost_cfg.bound_cfg.dof = self.n_dofs
             self.bound_cost = BoundCost(self.cost_cfg.bound_cfg)
 
         if self.cost_cfg.manipulability_cfg is not None:
@@ -315,14 +315,18 @@ class ArmBase(RolloutBase, ArmBaseConfig):
         self.cost_cfg.bound_cfg.state_finite_difference_mode = (
             self.dynamics_model.state_finite_difference_mode
         )
-
+        self.cost_cfg.bound_cfg.dof = self.n_dofs
+        self.constraint_cfg.bound_cfg.dof = self.n_dofs
         self.bound_constraint = BoundCost(self.constraint_cfg.bound_cfg)
 
         if self.convergence_cfg.null_space_cfg is not None:
+            self.convergence_cfg.null_space_cfg.dof = self.n_dofs
             self.null_convergence = DistCost(self.convergence_cfg.null_space_cfg)
 
         # set start state:
-        start_state = torch.randn((1, self.dynamics_model.d_state), **vars(self.tensor_args))
+        start_state = torch.randn(
+            (1, self.dynamics_model.d_state), **(self.tensor_args.as_torch_dict())
+        )
         self._start_state = JointState(
             position=start_state[:, : self.dynamics_model.d_dof],
             velocity=start_state[:, : self.dynamics_model.d_dof],
@@ -366,9 +370,11 @@ class ArmBase(RolloutBase, ArmBaseConfig):
                 )
                 cost_list.append(coll_cost)
         if return_list:
-
             return cost_list
-        cost = cat_sum(cost_list)
+        if self.sum_horizon:
+            cost = cat_sum_horizon(cost_list)
+        else:
+            cost = cat_sum(cost_list)
         return cost
 
     def constraint_fn(
@@ -380,6 +386,7 @@ class ArmBase(RolloutBase, ArmBaseConfig):
         # setup constraint terms:
 
         constraint = self.bound_constraint.forward(state.state_seq)
+
         constraint_list = [constraint]
         if (
             self.constraint_cfg.primitive_collision_cfg is not None
@@ -403,7 +410,9 @@ class ArmBase(RolloutBase, ArmBaseConfig):
             self_constraint = self.robot_self_collision_constraint.forward(state.robot_spheres)
             constraint_list.append(self_constraint)
         constraint = cat_sum(constraint_list)
+
         feasible = constraint == 0.0
+
         if out_metrics is None:
             out_metrics = RolloutMetrics()
         out_metrics.feasible = feasible
@@ -571,6 +580,7 @@ class ArmBase(RolloutBase, ArmBaseConfig):
         ----------
         action_seq: torch.Tensor [num_particles, horizon, d_act]
         """
+
         # print(act_seq.shape, self._goal_buffer.batch_current_state_idx)
         if self.start_state is None:
             raise ValueError("start_state is not set in rollout")
@@ -578,6 +588,7 @@ class ArmBase(RolloutBase, ArmBaseConfig):
             state = self.dynamics_model.forward(
                 self.start_state, act_seq, self._goal_buffer.batch_current_state_idx
             )
+
         with profiler.record_function("cost/all"):
             cost_seq = self.cost_fn(state, act_seq)
 

@@ -25,6 +25,7 @@ from torch.distributions.multivariate_normal import MultivariateNormal
 # CuRobo
 from curobo.types.base import TensorDeviceType
 from curobo.util.logger import log_error, log_warn
+from curobo.util.torch_utils import get_torch_jit_decorator
 
 # Local Folder
 from ..opt.particle.particle_opt_utils import get_stomp_cov
@@ -498,7 +499,7 @@ class HaltonGenerator:
     def get_samples(self, num_samples, bounded=False):
         samples = self._get_samples(num_samples)
         if bounded:
-            samples = samples * self.range_b + self.low_bounds
+            samples = bound_samples(samples, self.range_b, self.low_bounds)
         return samples
 
     @profiler.record_function("halton_generator/gaussian_samples")
@@ -511,7 +512,13 @@ class HaltonGenerator:
         return gaussian_halton_samples
 
 
-@torch.jit.script
+@get_torch_jit_decorator()
+def bound_samples(samples: torch.Tensor, range_b: torch.Tensor, low_bounds: torch.Tensor):
+    samples = samples * range_b + low_bounds
+    return samples
+
+
+@get_torch_jit_decorator()
 def gaussian_transform(
     uniform_samples: torch.Tensor, proj_mat: torch.Tensor, i_mat: torch.Tensor, std_dev: float
 ):

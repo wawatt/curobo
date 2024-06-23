@@ -26,6 +26,7 @@ from curobo.opt.opt_base import Optimizer, OptimizerConfig
 from curobo.rollout.dynamics_model.integration_utils import build_fd_matrix
 from curobo.types.base import TensorDeviceType
 from curobo.types.tensor import T_BDOF, T_BHDOF_float, T_BHValue_float, T_BValue_float, T_HDOF_float
+from curobo.util.torch_utils import get_torch_jit_decorator
 
 
 class LineSearchType(Enum):
@@ -108,6 +109,7 @@ class NewtonOptBase(Optimizer, NewtonOptConfig):
                 self.action_horizon, device=self.tensor_args.device, dtype=self.tensor_args.dtype
             ).unsqueeze(0)
             self._temporal_mat += eye_mat
+        self.rollout_fn.sum_horizon = True
 
     def reset_cuda_graph(self):
         if self.cu_opt_graph is not None:
@@ -123,7 +125,7 @@ class NewtonOptBase(Optimizer, NewtonOptConfig):
 
     def _shift(self, shift_steps=1):
         # TODO: shift best q?:
-        self.best_cost[:] = 500000.0
+        self.best_cost[:] = 5000000.0
         self.best_iteration[:] = 0
         self.current_iteration[:] = 0
         return True
@@ -157,8 +159,9 @@ class NewtonOptBase(Optimizer, NewtonOptConfig):
         with profiler.record_function("newton/reset"):
             self.i = -1
             self._opt_finished = False
-            self.best_cost[:] = 500000.0
+            self.best_cost[:] = 5000000.0
             self.best_iteration[:] = 0
+            self.current_iteration[:] = 0
 
         super().reset()
 
@@ -222,11 +225,14 @@ class NewtonOptBase(Optimizer, NewtonOptConfig):
             self.n_problems * self.num_particles, self.action_horizon, self.rollout_fn.d_action
         )
         trajectories = self.rollout_fn(x_in)  # x_n = (batch*line_search_scale) x horizon x d_action
-        cost = torch.sum(
-            trajectories.costs.view(self.n_problems, self.num_particles, self.horizon),
-            dim=-1,
-            keepdim=True,
-        )
+        if len(trajectories.costs.shape) == 2:
+            cost = torch.sum(
+                trajectories.costs.view(self.n_problems, self.num_particles, self.horizon),
+                dim=-1,
+                keepdim=True,
+            )
+        else:
+            cost = trajectories.costs.view(self.n_problems, self.num_particles, 1)
         g_x = cost.backward(gradient=self.l_vec, retain_graph=False)
         g_x = x_n.grad.detach()
         return (
@@ -443,6 +449,7 @@ class NewtonOptBase(Optimizer, NewtonOptConfig):
                 self.cost_delta_threshold,
                 self.cost_relative_threshold,
             )
+            # print(self.best_cost[0], self.best_q[0])
         else:
             cost = cost.detach()
             q = q.detach()
@@ -542,7 +549,7 @@ class NewtonOptBase(Optimizer, NewtonOptConfig):
             )
 
 
-@torch.jit.script
+@get_torch_jit_decorator()
 def get_x_set_jit(step_vec, x, alpha_list, action_lows, action_highs):
     # step_direction = step_direction.detach()
     x_set = torch.clamp(x.unsqueeze(-2) + alpha_list * step_vec, action_lows, action_highs)
@@ -550,7 +557,7 @@ def get_x_set_jit(step_vec, x, alpha_list, action_lows, action_highs):
     return x_set
 
 
-@torch.jit.script
+@get_torch_jit_decorator()
 def _armijo_line_search_tail_jit(c, g_x, step_direction, c_1, alpha_list, c_idx, x_set, d_opt):
     c_0 = c[:, 0:1]
     g_0 = g_x[:, 0:1]
@@ -581,7 +588,7 @@ def _armijo_line_search_tail_jit(c, g_x, step_direction, c_1, alpha_list, c_idx,
     return (best_x, best_c, best_grad)
 
 
-@torch.jit.script
+@get_torch_jit_decorator()
 def _wolfe_search_tail_jit(c, g_x, x_set, m, d_opt: int):
     b, h, _ = x_set.shape
     g_x = g_x.view(b * h, -1)
@@ -593,7 +600,7 @@ def _wolfe_search_tail_jit(c, g_x, x_set, m, d_opt: int):
     return (best_x, best_c, best_grad)
 
 
-@torch.jit.script
+@get_torch_jit_decorator()
 def scale_action(dx, action_step_max):
     scale_value = torch.max(torch.abs(dx) / action_step_max, dim=-1, keepdim=True)[0]
     scale_value = torch.clamp(scale_value, 1.0)
@@ -601,7 +608,7 @@ def scale_action(dx, action_step_max):
     return dx_scaled
 
 
-@torch.jit.script
+@get_torch_jit_decorator()
 def check_convergence(
     best_iteration: torch.Tensor, current_iteration: torch.Tensor, last_best: int
 ) -> bool:

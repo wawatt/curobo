@@ -37,6 +37,9 @@ from curobo.util_file import (
 )
 from curobo.wrap.reacher.ik_solver import IKSolver, IKSolverConfig
 
+# set seeds
+torch.manual_seed(2)
+
 torch.backends.cudnn.benchmark = True
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
@@ -49,6 +52,7 @@ def run_full_config_collision_free_ik(
     use_cuda_graph=False,
     collision_free=True,
     high_precision=False,
+    num_seeds=12,
 ):
     tensor_args = TensorDeviceType()
     robot_data = load_yaml(join_path(get_robot_configs_path(), robot_file))["robot_cfg"]
@@ -59,21 +63,22 @@ def run_full_config_collision_free_ik(
     robot_cfg = RobotConfig.from_dict(robot_data)
     world_cfg = WorldConfig.from_dict(load_yaml(join_path(get_world_configs_path(), world_file)))
     position_threshold = 0.005
+    grad_iters = None
     if high_precision:
         position_threshold = 0.001
+        grad_iters = 100
     ik_config = IKSolverConfig.load_from_robot_config(
         robot_cfg,
         world_cfg,
-        rotation_threshold=0.05,
         position_threshold=position_threshold,
-        num_seeds=24,
+        num_seeds=num_seeds,
         self_collision_check=collision_free,
         self_collision_opt=collision_free,
         tensor_args=tensor_args,
         use_cuda_graph=use_cuda_graph,
         high_precision=high_precision,
         regularization=False,
-        # grad_iters=500,
+        grad_iters=grad_iters,
     )
     ik_solver = IKSolver(ik_config)
 
@@ -119,10 +124,15 @@ if __name__ == "__main__":
         default="ik",
         help="File name prefix to use to save benchmark results",
     )
-
+    parser.add_argument(
+        "--num_seeds",
+        type=int,
+        default=16,
+        help="Number of seeds to use for IK",
+    )
     args = parser.parse_args()
 
-    b_list = [1, 10, 100, 1000][-1:]
+    b_list = [1, 10, 100, 500, 2000][:]
 
     robot_list = get_motion_gen_robot_list() + get_multi_arm_robot_list()[:2]
     world_file = "collision_test.yml"
@@ -140,7 +150,8 @@ if __name__ == "__main__":
         "Position-Error-Collision-Free-IK(mm)": [],
         "Orientation-Error-Collision-Free-IK": [],
     }
-    for robot_file in robot_list:
+    for robot_file in robot_list[:-1]:
+        print("running for robot: ", robot_file)
         # create a sampler with dof:
         for b_size in b_list:
             # sample test configs:
@@ -152,6 +163,7 @@ if __name__ == "__main__":
                 use_cuda_graph=True,
                 collision_free=False,
                 high_precision=args.high_precision,
+                num_seeds=args.num_seeds,
             )
             dt_cu_ik_cfree, success, p_err_c, q_err_c = run_full_config_collision_free_ik(
                 robot_file,
@@ -159,6 +171,7 @@ if __name__ == "__main__":
                 batch_size=b_size,
                 use_cuda_graph=True,
                 collision_free=True,
+                num_seeds=args.num_seeds,
                 # high_precision=args.high_precision,
             )
             # print(dt_cu/b_size, dt_cu_cg/b_size)
@@ -175,13 +188,22 @@ if __name__ == "__main__":
 
             data["Collision-Free-IK-time(ms)"].append(dt_cu_ik_cfree * 1000.0)
     write_yaml(data, join_path(args.save_path, args.file_name + ".yml"))
+
     try:
         # Third Party
         import pandas as pd
 
         df = pd.DataFrame(data)
         print("Reported errors are 98th percentile")
-        print(df)
         df.to_csv(join_path(args.save_path, args.file_name + ".csv"))
+        try:
+            # Third Party
+            from tabulate import tabulate
+
+            print(tabulate(df, headers="keys", tablefmt="grid"))
+        except ImportError:
+            print(df)
+
+            pass
     except ImportError:
         pass

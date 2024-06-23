@@ -45,8 +45,8 @@ torch.manual_seed(2)
 
 torch.backends.cudnn.benchmark = True
 
-torch.backends.cuda.matmul.allow_tf32 = False
-torch.backends.cudnn.allow_tf32 = False
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
 
 np.random.seed(2)
 random.seed(2)
@@ -144,6 +144,7 @@ def load_curobo(
     collision_activation_distance: float = 0.02,
     args=None,
     parallel_finetune=False,
+    ik_seeds=None,
 ):
     robot_cfg = load_yaml(join_path(get_robot_configs_path(), "franka.yml"))["robot_cfg"]
     robot_cfg["kinematics"]["collision_sphere_buffer"] = collision_buffer
@@ -151,13 +152,14 @@ def load_curobo(
     robot_cfg["kinematics"]["collision_link_names"].remove("attached_object")
     robot_cfg["kinematics"]["ee_link"] = "panda_hand"
 
-    # del robot_cfg["kinematics"]
+    if ik_seeds is None:
+        ik_seeds = 32
 
-    ik_seeds = 30  # 500
     if graph_mode:
         trajopt_seeds = 4
-    if trajopt_seeds >= 14:
-        ik_seeds = max(100, trajopt_seeds * 2)
+        collision_activation_distance = 0.0
+    if trajopt_seeds >= 16:
+        ik_seeds = 100
     if mpinets:
         robot_cfg["kinematics"]["lock_joints"] = {
             "panda_finger_joint1": 0.025,
@@ -181,11 +183,11 @@ def load_curobo(
     K = robot_cfg_instance.kinematics.kinematics_config.joint_limits
     K.position[0, :] -= 0.2
     K.position[1, :] += 0.2
-    finetune_iters = 300
+    finetune_iters = 200
     grad_iters = None
     if args.report_edition:
         finetune_iters = 200
-        grad_iters = 125
+        grad_iters = 100
     motion_gen_config = MotionGenConfig.load_from_robot_config(
         robot_cfg_instance,
         world_cfg,
@@ -207,10 +209,11 @@ def load_curobo(
         collision_activation_distance=collision_activation_distance,
         trajopt_dt=0.25,
         finetune_dt_scale=finetune_dt_scale,
-        maximum_trajectory_dt=0.16,
+        high_precision=args.high_precision,
     )
     mg = MotionGen(motion_gen_config)
     mg.warmup(enable_graph=True, warmup_js_trajopt=False, parallel_finetune=parallel_finetune)
+
     return mg, robot_cfg
 
 
@@ -227,24 +230,20 @@ def benchmark_mb(
     # load dataset:
     force_graph = False
 
-    interpolation_dt = 0.02
-    # mpinets_data = True
-    # if mpinets_data:
     file_paths = [motion_benchmaker_raw, mpinets_raw][:]
     if args.demo:
         file_paths = [demo_raw]
 
-    # else:22
-    #    file_paths = [get_mb_dataset_path()][:1]
     enable_debug = save_log or plot_cost
     all_files = []
     og_tsteps = 32
     if override_tsteps is not None:
         og_tsteps = override_tsteps
-    og_finetune_dt_scale = 0.9
-    og_trajopt_seeds = 12
-    og_parallel_finetune = not args.jetson
+    og_finetune_dt_scale = 0.85
+    og_trajopt_seeds = 4
+    og_parallel_finetune = True
     og_collision_activation_distance = 0.01
+    og_ik_seeds = None
     for file_path in file_paths:
         all_groups = []
         mpinets_data = False
@@ -252,56 +251,21 @@ def benchmark_mb(
         if "dresser_task_oriented" in list(problems.keys()):
             mpinets_data = True
         for key, v in tqdm(problems.items()):
+
             finetune_dt_scale = og_finetune_dt_scale
             force_graph = False
             tsteps = og_tsteps
             trajopt_seeds = og_trajopt_seeds
             collision_activation_distance = og_collision_activation_distance
             parallel_finetune = og_parallel_finetune
-            if "cage_panda" in key:
-                trajopt_seeds = 16
-                finetune_dt_scale = 0.95
-                parallel_finetune = True
-            if "table_under_pick_panda" in key:
-                tsteps = 40
-                trajopt_seeds = 24
-                finetune_dt_scale = 0.95
-                parallel_finetune = True
+            ik_seeds = og_ik_seeds
 
-            if "table_pick_panda" in key:
-                collision_activation_distance = 0.005
+            scene_problems = problems[key]
+            n_cubes = check_problems(scene_problems)
 
             if "cubby_task_oriented" in key and "merged" not in key:
-                trajopt_seeds = 24
-                finetune_dt_scale = 0.95
-                collision_activation_distance = 0.015
-                parallel_finetune = True
-            if "dresser_task_oriented" in key:
-                trajopt_seeds = 24
-                # tsteps = 40
-                finetune_dt_scale = 0.95
-                collision_activation_distance = 0.01
-                parallel_finetune = True
-            if key in [
-                "tabletop_neutral_start",
-                "merged_cubby_neutral_start",
-                "merged_cubby_task_oriented",
-                "cubby_neutral_start",
-                "cubby_neutral_goal",
-                "dresser_neutral_start",
-                "dresser_neutral_goal",
-                "tabletop_task_oriented",
-            ]:
-                collision_activation_distance = 0.005
-            if key in ["dresser_neutral_goal"]:
-                trajopt_seeds = 24  # 24
-                # tsteps = 36
-                collision_activation_distance = 0.01
-            # trajopt_seeds = 12
-            scene_problems = problems[key]  # [:10]
-            n_cubes = check_problems(scene_problems)
-            # print(n_cubes)
-            # continue
+                trajopt_seeds = 8
+
             mg, robot_cfg = load_curobo(
                 n_cubes,
                 enable_debug,
@@ -316,6 +280,7 @@ def benchmark_mb(
                 collision_activation_distance=collision_activation_distance,
                 args=args,
                 parallel_finetune=parallel_finetune,
+                ik_seeds=ik_seeds,
             )
             m_list = []
             i = 0
@@ -326,16 +291,16 @@ def benchmark_mb(
                     continue
 
                 plan_config = MotionGenPlanConfig(
-                    max_attempts=100,
+                    max_attempts=20,  # 20,
                     enable_graph_attempt=1,
-                    disable_graph_attempt=20,
-                    enable_finetune_trajopt=True,
-                    partial_ik_opt=False,
+                    disable_graph_attempt=10,
+                    enable_finetune_trajopt=not args.no_finetune,
                     enable_graph=graph_mode or force_graph,
                     timeout=60,
                     enable_opt=not graph_mode,
                     need_graph_success=force_graph,
                     parallel_finetune=parallel_finetune,
+                    finetune_dt_scale=finetune_dt_scale,
                 )
                 q_start = problem["start"]
                 pose = (
@@ -344,9 +309,11 @@ def benchmark_mb(
                 problem_name = "d_" + key + "_" + str(i)
 
                 # reset planner
-                mg.reset(reset_seed=True)
+                mg.reset(reset_seed=False)
                 if args.mesh:
-                    world = WorldConfig.from_dict(deepcopy(problem["obstacles"])).get_mesh_world()
+                    world = WorldConfig.from_dict(deepcopy(problem["obstacles"])).get_mesh_world(
+                        merge_meshes=False
+                    )
                 else:
                     world = WorldConfig.from_dict(deepcopy(problem["obstacles"])).get_obb_world()
                 mg.world_coll_checker.clear_cache()
@@ -355,7 +322,13 @@ def benchmark_mb(
                 # run planner
                 start_state = JointState.from_position(mg.tensor_args.to_device([q_start]))
                 goal_pose = Pose.from_list(pose)
-
+                if i == 1:
+                    for _ in range(3):
+                        result = mg.plan_single(
+                            start_state,
+                            goal_pose,
+                            plan_config.clone(),
+                        )
                 result = mg.plan_single(
                     start_state,
                     goal_pose,
@@ -389,11 +362,9 @@ def benchmark_mb(
                         dt = result.optimized_dt.item()
                     if "trajopt_result" in result.debug_info:
                         success = result.success.item()
-                        traj_cost = (
-                            # result.debug_info["trajopt_result"].debug_info["solver"]["cost"][0]
-                            result.debug_info["trajopt_result"].debug_info["solver"]["cost"][-1]
-                        )
-                        # print(traj_cost[0])
+                        traj_cost = result.debug_info["trajopt_result"].debug_info["solver"][
+                            "cost"
+                        ][-1]
                         traj_cost = torch.cat(traj_cost, dim=-1)
                         plot_cost_iteration(
                             traj_cost,
@@ -438,7 +409,7 @@ def benchmark_mb(
                         .squeeze()
                         .numpy()
                         .tolist(),
-                        "dt": interpolation_dt,
+                        "dt": result.interpolation_dt,
                     }
 
                     debug = {
@@ -518,8 +489,8 @@ def benchmark_mb(
                             write_robot_usd_path="benchmark/log/usd/assets/",
                             robot_usd_local_reference="assets/",
                             base_frame="/world_" + problem_name,
-                            visualize_robot_spheres=False,
-                            flatten_usd=False,
+                            visualize_robot_spheres=True,
+                            flatten_usd=True,
                         )
 
                     if write_plot:  # and result.optimized_dt.item() > 0.06:
@@ -572,12 +543,12 @@ def benchmark_mb(
                         start_state,
                         Pose.from_list(pose),
                         join_path("benchmark/log/usd/", problem_name) + "_debug",
-                        write_ik=False,
+                        write_ik=True,
                         write_trajopt=True,
-                        visualize_robot_spheres=False,
+                        visualize_robot_spheres=True,
                         grid_space=2,
                         write_robot_usd_path="benchmark/log/usd/assets/",
-                        # flatten_usd=True,
+                        flatten_usd=True,
                     )
                     print(result.status)
 
@@ -597,16 +568,32 @@ def benchmark_mb(
 
         g_m = CuroboGroupMetrics.from_list(all_groups)
         if not args.kpi:
-            print(
-                "All: ",
-                f"{g_m.success:2.2f}",
-                g_m.motion_time.percent_98,
-                g_m.time.mean,
-                g_m.time.percent_75,
-                g_m.position_error.percent_75,
-                g_m.orientation_error.percent_75,
-            )
 
+            try:
+                # Third Party
+                from tabulate import tabulate
+
+                headers = ["Metric", "Value"]
+
+                table = [
+                    ["Success %", f"{g_m.success:2.2f}"],
+                    ["Plan Time (s)", g_m.time],
+                    ["Motion Time(s)", g_m.motion_time],
+                    ["Path Length (rad.)", g_m.cspace_path_length],
+                    ["Jerk", g_m.jerk],
+                    ["Position Error (mm)", g_m.position_error],
+                ]
+                print(tabulate(table, headers, tablefmt="grid"))
+            except ImportError:
+                print(
+                    "All: ",
+                    f"{g_m.success:2.2f}",
+                    g_m.motion_time.percent_98,
+                    g_m.time.mean,
+                    g_m.time.percent_75,
+                    g_m.position_error.percent_75,
+                    g_m.orientation_error.percent_75,
+                )
         if write_benchmark:
             if not mpinets_data:
                 write_yaml(problems, args.file_name + "_mb_solution.yaml")
@@ -614,15 +601,33 @@ def benchmark_mb(
                 write_yaml(problems, args.file_name + "_mpinets_solution.yaml")
         all_files += all_groups
     g_m = CuroboGroupMetrics.from_list(all_files)
-    print("######## FULL SET ############")
-    print("All: ", f"{g_m.success:2.2f}")
-    print("MT: ", g_m.motion_time)
-    print("path-length: ", g_m.cspace_path_length)
-    print("PT:", g_m.time)
-    print("ST: ", g_m.solve_time)
-    print("position error (mm): ", g_m.position_error)
-    print("orientation error(%): ", g_m.orientation_error)
-    print("jerk: ", g_m.jerk)
+
+    try:
+        # Third Party
+        from tabulate import tabulate
+
+        headers = ["Metric", "Value"]
+
+        table = [
+            ["Success %", f"{g_m.success:2.2f}"],
+            ["Plan Time (s)", g_m.time],
+            ["Motion Time(s)", g_m.motion_time],
+            ["Path Length (rad.)", g_m.cspace_path_length],
+            ["Jerk", g_m.jerk],
+            ["Position Error (mm)", g_m.position_error],
+        ]
+        print(tabulate(table, headers, tablefmt="grid"))
+    except ImportError:
+
+        print("######## FULL SET ############")
+        print("All: ", f"{g_m.success:2.2f}")
+        print("MT: ", g_m.motion_time)
+        print("path-length: ", g_m.cspace_path_length)
+        print("PT:", g_m.time)
+        print("ST: ", g_m.solve_time)
+        print("position error (mm): ", g_m.position_error)
+        print("orientation error(%): ", g_m.orientation_error)
+        print("jerk: ", g_m.jerk)
 
     if args.kpi:
         kpi_data = {
@@ -728,11 +733,24 @@ if __name__ == "__main__":
         help="When True, runs benchmark with parameters for jetson",
         default=False,
     )
+    parser.add_argument(
+        "--no_finetune",
+        action="store_true",
+        help="When True, runs benchmark with parameters for jetson",
+        default=False,
+    )
+    parser.add_argument(
+        "--high_precision",
+        action="store_true",
+        help="When True, runs benchmark with parameters for jetson",
+        default=False,
+    )
 
     args = parser.parse_args()
 
     setup_curobo_logger("error")
-    for _ in range(1):
+    for i in range(1):
+        print("*****RUN: " + str(i))
         benchmark_mb(
             save_log=False,
             write_usd=args.save_usd,

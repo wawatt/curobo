@@ -10,7 +10,7 @@
 #
 # Standard Library
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 # Third Party
 import torch
@@ -29,8 +29,9 @@ from curobo.types.base import TensorDeviceType
 from curobo.types.robot import RobotConfig
 from curobo.types.tensor import T_BValue_float, T_BValue_int
 from curobo.util.helpers import list_idx_if_not_none
-from curobo.util.logger import log_error, log_info
-from curobo.util.tensor_util import cat_max, cat_sum
+from curobo.util.logger import log_error, log_info, log_warn
+from curobo.util.tensor_util import cat_max
+from curobo.util.torch_utils import get_torch_jit_decorator
 
 # Local Folder
 from .arm_base import ArmBase, ArmBaseConfig, ArmCostConfig
@@ -145,7 +146,7 @@ class ArmReacherConfig(ArmBaseConfig):
         )
 
 
-@torch.jit.script
+@get_torch_jit_decorator()
 def _compute_g_dist_jit(rot_err_norm, goal_dist):
     # goal_cost = goal_cost.view(cost.shape)
     # rot_err_norm = rot_err_norm.view(cost.shape)
@@ -173,6 +174,7 @@ class ArmReacher(ArmBase, ArmReacherConfig):
         self._n_goalset = 1
 
         if self.cost_cfg.cspace_cfg is not None:
+            self.cost_cfg.cspace_cfg.dof = self.d_action
             # self.cost_cfg.cspace_cfg.update_vec_weight(self.dynamics_model.cspace_distance_weight)
             self.dist_cost = DistCost(self.cost_cfg.cspace_cfg)
         if self.cost_cfg.pose_cfg is not None:
@@ -225,6 +227,7 @@ class ArmReacher(ArmBase, ArmReacherConfig):
                 if i != self.kinematics.ee_link:
                     self._link_pose_convergence[i] = PoseCost(self.convergence_cfg.link_pose_cfg)
         if self.convergence_cfg.cspace_cfg is not None:
+            self.convergence_cfg.cspace_cfg.dof = self.d_action
             self.cspace_convergence = DistCost(self.convergence_cfg.cspace_cfg)
 
         # check if g_dist is required in any of the cost terms:
@@ -262,7 +265,7 @@ class ArmReacher(ArmBase, ArmReacherConfig):
                     goal_cost = self.goal_cost.forward(
                         ee_pos_batch, ee_quat_batch, self._goal_buffer
                     )
-
+                # print(self._compute_g_dist, goal_cost.view(-1))
                 cost_list.append(goal_cost)
         with profiler.record_function("cost/link_poses"):
             if self._goal_buffer.links_goal_pose is not None and self.cost_cfg.pose_cfg is not None:
@@ -273,7 +276,7 @@ class ArmReacher(ArmBase, ArmReacherConfig):
                         current_fn = self._link_pose_costs[k]
                         if current_fn.enabled:
                             # get link pose
-                            current_pose = link_poses[k]
+                            current_pose = link_poses[k].contiguous()
                             current_pos = current_pose.position
                             current_quat = current_pose.quaternion
 
@@ -285,6 +288,7 @@ class ArmReacher(ArmBase, ArmReacherConfig):
             and self.cost_cfg.cspace_cfg is not None
             and self.dist_cost.enabled
         ):
+
             joint_cost = self.dist_cost.forward_target_idx(
                 self._goal_buffer.goal_state.position,
                 state_batch.position,
@@ -319,7 +323,12 @@ class ArmReacher(ArmBase, ArmReacherConfig):
                 g_dist,
             )
             cost_list.append(z_vel)
-        cost = cat_sum(cost_list)
+        with profiler.record_function("cat_sum"):
+            if self.sum_horizon:
+                cost = cat_sum_horizon_reacher(cost_list)
+            else:
+                cost = cat_sum_reacher(cost_list)
+
         return cost
 
     def convergence_fn(
@@ -466,3 +475,15 @@ class ArmReacher(ArmBase, ArmReacherConfig):
                 )
                 for x in pose_costs
             ]
+
+
+@get_torch_jit_decorator()
+def cat_sum_reacher(tensor_list: List[torch.Tensor]):
+    cat_tensor = torch.sum(torch.stack(tensor_list, dim=0), dim=0)
+    return cat_tensor
+
+
+@get_torch_jit_decorator()
+def cat_sum_horizon_reacher(tensor_list: List[torch.Tensor]):
+    cat_tensor = torch.sum(torch.stack(tensor_list, dim=0), dim=(0, -1))
+    return cat_tensor

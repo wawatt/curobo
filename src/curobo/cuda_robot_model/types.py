@@ -23,6 +23,7 @@ from curobo.types.base import TensorDeviceType
 from curobo.types.math import Pose
 from curobo.types.state import JointState
 from curobo.types.tensor import T_DOF
+from curobo.util.logger import log_error
 from curobo.util.tensor_util import clone_if_not_none, copy_if_not_none
 
 
@@ -138,6 +139,13 @@ class CSpaceConfig:
             self.acceleration_scale = self.tensor_args.to_device(self.acceleration_scale)
         if isinstance(self.jerk_scale, List):
             self.jerk_scale = self.tensor_args.to_device(self.jerk_scale)
+        # check shapes:
+        if self.retract_config is not None:
+            dof = self.retract_config.shape
+            if self.cspace_distance_weight is not None and self.cspace_distance_weight.shape != dof:
+                log_error("cspace_distance_weight shape does not match retract_config")
+            if self.null_space_weight is not None and self.null_space_weight.shape != dof:
+                log_error("null_space_weight shape does not match retract_config")
 
     def inplace_reindex(self, joint_names: List[str]):
         new_index = [self.joint_names.index(j) for j in joint_names]
@@ -207,8 +215,8 @@ class CSpaceConfig:
     ):
         retract_config = ((joint_position_upper + joint_position_lower) / 2).flatten()
         n_dof = retract_config.shape[-1]
-        null_space_weight = torch.ones(n_dof, **vars(tensor_args))
-        cspace_distance_weight = torch.ones(n_dof, **vars(tensor_args))
+        null_space_weight = torch.ones(n_dof, **(tensor_args.as_torch_dict()))
+        cspace_distance_weight = torch.ones(n_dof, **(tensor_args.as_torch_dict()))
         return CSpaceConfig(
             joint_names,
             retract_config,
@@ -220,28 +228,87 @@ class CSpaceConfig:
 
 @dataclass
 class KinematicsTensorConfig:
+    """Stores robot's kinematics parameters as Tensors to use in Kinematics computations.
+
+    Use :meth:`curobo.cuda_robot_model.cuda_robot_generator.CudaRobotGenerator` to generate this
+    configuration from a urdf or usd.
+
+    """
+
+    #: Static Homogenous Transform from parent link to child link for all links [n_links,4,4].
     fixed_transforms: torch.Tensor
+
+    #: index of fixed_transform given link index [n_links].
     link_map: torch.Tensor
+
+    #: joint index given link index [n_links].
     joint_map: torch.Tensor
+
+    #: type of joint given link index [n_links].
     joint_map_type: torch.Tensor
+
+    joint_offset_map: torch.Tensor
+
+    #: index of link to write out pose [n_store_links].
     store_link_map: torch.Tensor
+
+    #: Mapping between each link to every other link, this is used to check
+    #: if a link is part of a serial chain formed by another link [n_links, n_links].
     link_chain_map: torch.Tensor
+
+    #: Name of links whose pose will be stored [n_store_links].
     link_names: List[str]
+
+    #: Joint limits
     joint_limits: JointLimits
+
+    #: Name of joints which are not fixed.
     non_fixed_joint_names: List[str]
+
+    #: Number of joints that are active. Each joint is only actuated along 1 dimension.
     n_dof: int
+
+    #: Name of links which have a mesh. Currently only used for debugging and rendering.
     mesh_link_names: Optional[List[str]] = None
+
+    #: Name of all actuated joints.
     joint_names: Optional[List[str]] = None
+
+    #:
     lock_jointstate: Optional[JointState] = None
+
+    #:
+    mimic_joints: Optional[dict] = None
+
+    #:
     link_spheres: Optional[torch.Tensor] = None
+
+    #:
     link_sphere_idx_map: Optional[torch.Tensor] = None
+
+    #:
     link_name_to_idx_map: Optional[Dict[str, int]] = None
+
+    #: total number of spheres that represent the robot's geometry.
     total_spheres: int = 0
+
+    #: Additional debug parameters.
     debug: Optional[Any] = None
+
+    #: index of end-effector in stored link poses.
     ee_idx: int = 0
+
+    #: Cspace configuration
     cspace: Optional[CSpaceConfig] = None
+
+    #: Name of base link. This is the root link from which all kinematic parameters were computed.
     base_link: str = "base_link"
+
+    #: Name of end-effector link for which the Cartesian pose will be computed.
     ee_link: str = "ee_link"
+
+    #: A copy of link spheres that is used as reference, in case the link_spheres get modified at
+    #: runtime.
     reference_link_spheres: Optional[torch.Tensor] = None
 
     def __post_init__(self):
@@ -252,7 +319,7 @@ class KinematicsTensorConfig:
         if self.link_spheres is not None and self.reference_link_spheres is None:
             self.reference_link_spheres = self.link_spheres.clone()
 
-    def copy_(self, new_config: KinematicsTensorConfig):
+    def copy_(self, new_config: KinematicsTensorConfig) -> KinematicsTensorConfig:
         self.fixed_transforms.copy_(new_config.fixed_transforms)
         self.link_map.copy_(new_config.link_map)
         self.joint_map.copy_(new_config.joint_map)
@@ -260,6 +327,7 @@ class KinematicsTensorConfig:
         self.store_link_map.copy_(new_config.store_link_map)
         self.link_chain_map.copy_(new_config.link_chain_map)
         self.joint_limits.copy_(new_config.joint_limits)
+        self.joint_offset_map.copy_(new_config.joint_offset_map)
         if new_config.link_spheres is not None and self.link_spheres is not None:
             self.link_spheres.copy_(new_config.link_spheres)
         if new_config.link_sphere_idx_map is not None and self.link_sphere_idx_map is not None:
@@ -289,8 +357,8 @@ class KinematicsTensorConfig:
         retract_config = (
             (self.joint_limits.position[1] + self.joint_limits.position[0]) / 2
         ).flatten()
-        null_space_weight = torch.ones(self.n_dof, **vars(self.tensor_args))
-        cspace_distance_weight = torch.ones(self.n_dof, **vars(self.tensor_args))
+        null_space_weight = torch.ones(self.n_dof, **(self.tensor_args.as_torch_dict()))
+        cspace_distance_weight = torch.ones(self.n_dof, **(self.tensor_args.as_torch_dict()))
         joint_names = self.joint_names
         self.cspace = CSpaceConfig(
             joint_names,
@@ -313,7 +381,8 @@ class KinematicsTensorConfig:
     ):
         """Update sphere parameters
 
-        #NOTE: This currently does not update self collision distances.
+        NOTE: This currently does not update self collision distances.
+
         Args:
             link_name: _description_
             sphere_position_radius: _description_
@@ -427,52 +496,3 @@ class SelfCollisionKinematicsConfig:
     collision_matrix: Optional[torch.Tensor] = None
     experimental_kernel: bool = True
     checks_per_thread: int = 32
-
-
-@dataclass(frozen=True)
-class CudaRobotModelState:
-    """Dataclass that stores kinematics information."""
-
-    #: End-effector position stored as x,y,z in meters [b, 3]. End-effector is defined by
-    #: :py:attr:`curobo.cuda_robot_model.cuda_robot_generator.CudaRobotGeneratorConfig.ee_link`.
-    ee_position: torch.Tensor
-
-    #: End-effector orientaiton stored as quaternion qw, qx, qy, qz [b,4]. End-effector is defined
-    # by :py:attr:`CudaRobotModelConfig.ee_link`.
-    ee_quaternion: torch.Tensor
-
-    #: Linear Jacobian. Currently not supported.
-    lin_jacobian: Optional[torch.Tensor] = None
-
-    #: Angular Jacobian. Currently not supported.
-    ang_jacobian: Optional[torch.Tensor] = None
-
-    #: Position of links specified by link_names  (:py:attr:`CudaRobotModelConfig.link_names`).
-    links_position: Optional[torch.Tensor] = None
-
-    #: Quaternions of links specified by link names (:py:attr:`CudaRobotModelConfig.link_names`).
-    links_quaternion: Optional[torch.Tensor] = None
-
-    #: Position of spheres specified by collision spheres (:py:attr:`CudaRobotModelConfig.collision_spheres`)
-    #: in x, y, z, r format [b,n,4].
-    link_spheres_tensor: Optional[torch.Tensor] = None
-
-    link_names: Optional[str] = None
-
-    @property
-    def ee_pose(self):
-        return Pose(self.ee_position, self.ee_quaternion)
-
-    def get_link_spheres(self):
-        return self.link_spheres_tensor
-
-    @property
-    def link_pose(self):
-        link_poses = None
-        if self.link_names is not None:
-            link_poses = {}
-            link_pos = self.links_position.contiguous()
-            link_quat = self.links_quaternion.contiguous()
-            for i, v in enumerate(self.link_names):
-                link_poses[v] = Pose(link_pos[..., i, :], link_quat[..., i, :])
-        return link_poses

@@ -82,7 +82,7 @@ namespace Curobo
 
             if (write_grad)
             {
-              dist_vec = (sph1 - sph2) / distance;
+              dist_vec = normalize(sph1 - sph2);// / distance;
             }
           }
         }
@@ -186,11 +186,11 @@ namespace Curobo
             if (coll_matrix[i * nspheres + j] == 1)
             {
               float4 sph1 = __rs_shared[i];
-
-              if ((sph1.w <= 0.0) || (sph2.w <= 0.0))
-              {
-                continue;
-              }
+              //
+              //if ((sph1.w <= 0.0) || (sph2.w <= 0.0))
+              //{
+              //  continue;
+              //}
               float r_diff = sph1.w + sph2.w;
               float d      = sqrt((sph1.x - sph2.x) * (sph1.x - sph2.x) +
                                   (sph1.y - sph2.y) * (sph1.y - sph2.y) +
@@ -236,7 +236,7 @@ namespace Curobo
             uint64_t nd     = __shfl_down_sync(mask, *(uint64_t *)&max_d, offset);
             dist_t   d_temp = *(dist_t *)&nd;
 
-            if (d_temp.d > max_d.d)
+            if (((threadIdx.x + offset) < blockDim.x)  && d_temp.d > max_d.d)
             {
               max_d = d_temp;
             }
@@ -286,11 +286,12 @@ namespace Curobo
 
           if (write_grad)
           {
+            // NOTE: spheres can be read from rs_shared
             float3 sph1 =
               *(float3 *)&robot_spheres[4 * (batch_idx * nspheres + max_d.i)];
             float3 sph2 =
               *(float3 *)&robot_spheres[4 * (batch_idx * nspheres + max_d.j)];
-            float3 dist_vec = (sph1 - sph2) / max_d.d;
+            float3 dist_vec = normalize(sph1 - sph2);
             *(float3 *)&out_vec[batch_idx * nspheres * 4 + max_d.i * 4] =
               weight[0] * -1 * dist_vec;
             *(float3 *)&out_vec[batch_idx * nspheres * 4 + max_d.j * 4] =
@@ -382,10 +383,10 @@ namespace Curobo
           float4 sph1 = __rs_shared[NBPB * i + l];
           float4 sph2 = __rs_shared[NBPB * j + l];
 
-          if ((sph1.w <= 0.0) || (sph2.w <= 0.0))
-          {
-            continue;
-          }
+          //if ((sph1.w <= 0.0) || (sph2.w <= 0.0))
+          //{
+          //  continue;
+          //}
           float r_diff =
             sph1.w + sph2.w; // sum of two radii, radii include respective offsets
           float d = sqrt((sph1.x - sph2.x) * (sph1.x - sph2.x) +
@@ -436,7 +437,7 @@ namespace Curobo
               uint64_t nd     = __shfl_down_sync(mask, *(uint64_t *)&max_d[l], offset);
               dist_t   d_temp = *(dist_t *)&nd;
 
-              if (d_temp.d > max_d[l].d)
+              if (((threadIdx.x + offset) < blockDim.x)  && d_temp.d > max_d[l].d)
               {
                 max_d[l] = d_temp;
               }
@@ -495,13 +496,15 @@ namespace Curobo
 
             if (write_grad)
             {
+              // NOTE: spheres can also be read from rs_shared
               float3 sph1 =
                 *(float3 *)&robot_spheres[4 *
                                           ((batch_idx + l) * nspheres + max_d.i)];
               float3 sph2 =
                 *(float3 *)&robot_spheres[4 *
                                           ((batch_idx + l) * nspheres + max_d.j)];
-              float3 dist_vec = (sph1 - sph2) / max_d.d;
+              float3 dist_vec = normalize(sph1 - sph2);// / max_d.d;
+
               *(float3 *)&out_vec[(batch_idx + l) * nspheres * 4 + max_d.i * 4] =
                 weight[0] * -1 * dist_vec;
               *(float3 *)&out_vec[(batch_idx + l) * nspheres * 4 + max_d.j * 4] =

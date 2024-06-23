@@ -67,7 +67,7 @@ mppi:
   cov_type          : "DIAG_A" # 
   kappa             : 0.01
   null_act_frac     : 0.0
-  sample_mode       : 'BEST'
+  sample_mode       : 'MEAN'
   base_action       : 'REPEAT'
   squash_fn         : 'CLAMP'
   n_problems            : 1

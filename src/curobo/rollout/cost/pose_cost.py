@@ -105,9 +105,9 @@ class PoseCostMetric:
     @classmethod
     def create_grasp_approach_metric(
         cls,
-        offset_position: float = 0.5,
+        offset_position: float = 0.1,
         linear_axis: int = 2,
-        tstep_fraction: float = 0.6,
+        tstep_fraction: float = 0.8,
         tensor_args: TensorDeviceType = TensorDeviceType(),
     ) -> PoseCostMetric:
         """Enables moving to a pregrasp and then locked orientation movement to final grasp.
@@ -203,7 +203,6 @@ class PoseCost(CostBase, PoseCostConfig):
             self.offset_waypoint[:3].copy_(offset_rotation)
         self.offset_tstep_fraction[:] = offset_tstep_fraction
         if self._horizon <= 0:
-            print(self.weight)
             log_error(
                 "Updating offset waypoint is only possible after initializing motion gen"
                 + " run motion_gen.warmup() before adding offset_waypoint"
@@ -224,15 +223,12 @@ class PoseCost(CostBase, PoseCostConfig):
             run_weight = self.run_weight
 
         active_steps = math.floor(self._horizon * run_tstep_fraction)
+        self.initialize_run_weight_vec(self._horizon)
         self._run_weight_vec[:, :active_steps] = 0
         self._run_weight_vec[:, active_steps:-1] = run_weight
 
     def update_batch_size(self, batch_size, horizon):
         if batch_size != self._batch_size or horizon != self._horizon:
-            # print(self.weight)
-            # print(batch_size, horizon, self._batch_size, self._horizon)
-
-            # batch_size = b*h
             self.out_distance = torch.zeros(
                 (batch_size, horizon), device=self.tensor_args.device, dtype=self.tensor_args.dtype
             )
@@ -265,15 +261,20 @@ class PoseCost(CostBase, PoseCostConfig):
                 device=self.tensor_args.device,
                 dtype=self.tensor_args.dtype,
             )
-            if self._run_weight_vec is None or self._run_weight_vec.shape[1] != horizon:
-                self._run_weight_vec = torch.ones(
-                    (1, horizon), device=self.tensor_args.device, dtype=self.tensor_args.dtype
-                )
+            self.initialize_run_weight_vec(horizon)
             if self.terminal and self.run_weight is not None and horizon > 1:
                 self._run_weight_vec[:, :-1] = self.run_weight
 
             self._batch_size = batch_size
             self._horizon = horizon
+
+    def initialize_run_weight_vec(self, horizon: Optional[int] = None):
+        if horizon is None:
+            horizon = self._horizon
+        if self._run_weight_vec is None or self._run_weight_vec.shape[1] != horizon:
+            self._run_weight_vec = torch.ones(
+                (1, horizon), device=self.tensor_args.device, dtype=self.tensor_args.dtype
+            )
 
     @property
     def goalset_index_buffer(self):
