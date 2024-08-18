@@ -46,8 +46,6 @@ from curobo.util_file import (
 )
 from curobo.wrap.reacher.motion_gen import MotionGenResult
 
-def join_tree(path1, path2):
-    return path1+"/"+path2
 try:
     # Third Party
     from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics, UsdShade
@@ -449,7 +447,7 @@ class UsdHelper:
             # print(1.0 / self)
 
     def add_subroot(self, root="/world", sub_root="/obstacles", pose: Optional[Pose] = None):
-        xform = self.stage.DefinePrim(join_tree(root, sub_root), "Xform")
+        xform = self.stage.DefinePrim(join_path(root, sub_root), "Xform")
         if pose is not None:
             set_prim_transform(xform, pose.tolist(), use_float=self._use_float)
 
@@ -537,7 +535,7 @@ class UsdHelper:
         # iterate through every obstacle type and create prims:
 
         self.add_subroot(base_frame, obstacles_frame, base_t_obstacle_pose)
-        full_path = join_tree(base_frame, obstacles_frame)
+        full_path = join_path(base_frame, obstacles_frame)
         prim_path = [
             self.get_prim_from_obstacle(o, full_path, timestep=timestep) for o in obstacles.objects
         ]
@@ -566,7 +564,7 @@ class UsdHelper:
         timestep=None,
         enable_physics: bool = False,
     ):
-        root_path = join_tree(base_frame, obstacle.name)
+        root_path = join_path(base_frame, obstacle.name)
         obj_geom = UsdGeom.Cube.Define(self.stage, root_path)
         obj_prim = self.stage.GetPrimAtPath(root_path)
 
@@ -587,7 +585,7 @@ class UsdHelper:
         timestep=None,
         enable_physics: bool = False,
     ):
-        root_path = join_tree(base_frame, obstacle.name)
+        root_path = join_path(base_frame, obstacle.name)
         obj_geom = UsdGeom.Cylinder.Define(self.stage, root_path)
         obj_prim = self.stage.GetPrimAtPath(root_path)
 
@@ -610,7 +608,7 @@ class UsdHelper:
         timestep=None,
         enable_physics: bool = False,
     ):
-        root_path = join_tree(base_frame, obstacle.name)
+        root_path = join_path(base_frame, obstacle.name)
         obj_geom = UsdGeom.Sphere.Define(self.stage, root_path)
         obj_prim = self.stage.GetPrimAtPath(root_path)
         if obstacle.pose is None:
@@ -632,7 +630,7 @@ class UsdHelper:
         timestep=None,
         enable_physics: bool = False,
     ):
-        root_path = join_tree(base_frame, obstacle.name)
+        root_path = join_path(base_frame, obstacle.name)
         obj_geom = UsdGeom.Mesh.Define(self.stage, root_path)
         obj_prim = self.stage.GetPrimAtPath(root_path)
         # obstacle.update_material() # This does not get the correct materials
@@ -712,7 +710,7 @@ class UsdHelper:
             current_obs = obstacles[t]
             for j in range(len(current_obs)):
                 obs = current_obs[j]
-                obs_name = join_tree(join_tree(base_frame, obstacles_frame), obs.name)
+                obs_name = join_path(join_path(base_frame, obstacles_frame), obs.name)
                 if obs_name not in prim_paths:
                     log_warn("Obstacle not found")
                     continue
@@ -875,7 +873,7 @@ class UsdHelper:
             animation_poses.position[:, i, :] = new_pose.position
             animation_poses.quaternion[:, i, :] = new_pose.quaternion
 
-        robot_base_frame = join_tree(base_frame, robot_base_frame)
+        robot_base_frame = join_path(base_frame, robot_base_frame)
 
         usd_helper.create_animation(
             robot_mesh_model, animation_poses, base_frame, robot_frame=robot_base_frame
@@ -988,7 +986,7 @@ class UsdHelper:
         if robot_asset_prim_path is None:
             robot_asset_prim_path = kin_model.kinematics_parser.robot_prim_root
 
-        robot_base_frame = join_tree(base_frame, robot_base_frame)
+        robot_base_frame = join_path(base_frame, robot_base_frame)
 
         robot_usd_path = kin_model.generator_config.usd_path
 

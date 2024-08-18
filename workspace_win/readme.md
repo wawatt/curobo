@@ -8,7 +8,7 @@
 ```
 git lfs install
 ```
-3. modify for win11 OS (finished on this branch)
+3. modify for win11 OS (finished on this branch) 【official support win from v0.7.4】
 - src/curobo/curobolib/cpp/self_collision_kernel.cu, modify
     ```
     {.d = 0.0, .i = 0, .j = 0};
