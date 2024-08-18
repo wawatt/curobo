@@ -123,7 +123,6 @@ class MotionGenConfig:
 
     #: instance of trajectory optimization solver for final fine tuning for joint space targets.
     finetune_js_trajopt_solver: TrajOptSolver
-
     #: instance of trajectory optimization solver for final fine tuning.
     finetune_trajopt_solver: TrajOptSolver
 
@@ -1052,6 +1051,10 @@ class MotionGenStatus(Enum):
     #: Finetune Trajectory optimization failed to find a solution.
     FINETUNE_TRAJOPT_FAIL = "Finetune TrajOpt Fail"
 
+    #: Optimized dt is greater than the maximum allowed dt. Set maximum_trajectory_dt to a higher
+    #: value.
+    DT_EXCEPTION = "dt exceeded maximum allowed trajectory dt"
+
     #: Invalid query was given. The start state is either out of joint limits, in collision with
     #: world, or in self-collision. In the future, this will also check for reachability of goal
     #: pose/ joint target in joint limits.
@@ -1069,6 +1072,8 @@ class MotionGenStatus(Enum):
     #: Invalid start state was given. The start state is out of joint limits.
     INVALID_START_STATE_JOINT_LIMITS = "Start state is out of joint limits"
 
+    #: Invalid partial pose target.
+    INVALID_PARTIAL_POSE_COST_METRIC = "Invalid partial pose metric"
     #: Motion generation query was successful.
     SUCCESS = "Success"
 
@@ -1287,7 +1292,7 @@ class MotionGenResult:
         interpolate_trajectory: bool = True,
         interpolation_dt: Optional[float] = None,
         interpolation_kind: InterpolateType = InterpolateType.LINEAR_CUDA,
-        create_interpolation_buffer: bool = False,
+        create_interpolation_buffer: bool = True,
     ):
         """Retime the optimized trajectory by a dilation factor.
 
@@ -1402,7 +1407,7 @@ class MotionGen(MotionGenConfig):
         self._rollout_list = None
         self._solver_rollout_list = None
         self._pose_solver_rollout_list = None
-
+        self._pose_rollout_list = None
         self._kin_list = None
         self.update_batch_size(seeds=self.trajopt_seeds)
 
@@ -1787,7 +1792,7 @@ class MotionGen(MotionGenConfig):
             world: New world configuration for collision checking.
         """
         self.world_coll_checker.load_collision_model(world, fix_cache_reference=self.use_cuda_graph)
-        self.graph_planner.reset_graph()
+        self.graph_planner.reset_buffer()
 
     def clear_world_cache(self):
         """Remove all collision objects from collision cache."""
@@ -2031,6 +2036,8 @@ class MotionGen(MotionGenConfig):
                 attribute to see if the query was successful.
         """
 
+        start_time = time.time()
+
         time_dict = {
             "solve_time": 0,
             "ik_time": 0,
@@ -2082,6 +2089,8 @@ class MotionGen(MotionGenConfig):
             if result.success.item():
                 break
             if not result.valid_query:
+                break
+            if time.time() - start_time > plan_config.timeout:
                 break
 
         result.graph_time = time_dict["graph_time"]
@@ -2199,13 +2208,12 @@ class MotionGen(MotionGenConfig):
                     log_warn("Partial position between start and goal is not equal.")
                     return False
 
-        rollouts = self.get_all_pose_solver_rollout_instances()
+        rollouts = self.get_all_pose_rollout_instances()
         [
             rollout.update_pose_cost_metric(metric)
             for rollout in rollouts
             if isinstance(rollout, ArmReacher)
         ]
-        torch.cuda.synchronize(device=self.tensor_args.device)
         return True
 
     def get_all_rollout_instances(self) -> List[RolloutBase]:
@@ -2243,6 +2251,16 @@ class MotionGen(MotionGenConfig):
             )
         return self._pose_solver_rollout_list
 
+    def get_all_pose_rollout_instances(self) -> List[RolloutBase]:
+        """Get all rollout instances used across components in motion generation."""
+        if self._pose_rollout_list is None:
+            self._pose_rollout_list = (
+                self.ik_solver.get_all_rollout_instances()
+                + self.trajopt_solver.get_all_rollout_instances()
+                + self.finetune_trajopt_solver.get_all_rollout_instances()
+            )
+        return self._pose_rollout_list
+
     def get_all_kinematics_instances(self) -> List[CudaRobotModel]:
         """Get all kinematics instances used across components in motion generation.
 
@@ -2268,7 +2286,7 @@ class MotionGen(MotionGenConfig):
         voxelize_method: str = "ray",
         world_objects_pose_offset: Optional[Pose] = None,
         remove_obstacles_from_world_config: bool = False,
-    ) -> None:
+    ) -> bool:
         """Attach an object or objects from world to a robot's link.
 
         This method assumes that the objects exist in the world configuration. If attaching
@@ -2315,7 +2333,13 @@ class MotionGen(MotionGenConfig):
         sphere_tensor[:, 3] = -10.0
         sph_list = []
         if n_spheres == 0:
-            log_error("MG: No spheres found")
+            log_warn(
+                "MG: No spheres found, max_spheres: "
+                + str(max_spheres)
+                + " n_objects: "
+                + str(len(object_names))
+            )
+            return False
         for i, x in enumerate(object_names):
             obs = self.world_model.get_obstacle(x)
             if obs is None:
@@ -2348,6 +2372,8 @@ class MotionGen(MotionGenConfig):
 
         self.attach_spheres_to_robot(sphere_tensor=sphere_tensor, link_name=link_name)
 
+        return True
+
     def attach_external_objects_to_robot(
         self,
         joint_state: JointState,
@@ -2357,7 +2383,7 @@ class MotionGen(MotionGenConfig):
         sphere_fit_type: SphereFitType = SphereFitType.VOXEL_VOLUME_SAMPLE_SURFACE,
         voxelize_method: str = "ray",
         world_objects_pose_offset: Optional[Pose] = None,
-    ) -> None:
+    ) -> bool:
         """Attach external objects (not in world model) to a robot's link.
 
         Args:
@@ -2398,7 +2424,13 @@ class MotionGen(MotionGenConfig):
         sphere_tensor[:, 3] = -10.0
         sph_list = []
         if n_spheres == 0:
-            log_error("MG: No spheres found")
+            log_warn(
+                "MG: No spheres found, max_spheres: "
+                + str(max_spheres)
+                + " n_objects: "
+                + str(len(object_names))
+            )
+            return False
         for i, x in enumerate(object_names):
             obs = external_objects[i]
             sph = obs.get_bounding_spheres(
@@ -2420,6 +2452,7 @@ class MotionGen(MotionGenConfig):
         sphere_tensor[: spheres.shape[0], :] = spheres.contiguous()
 
         self.attach_spheres_to_robot(sphere_tensor=sphere_tensor, link_name=link_name)
+        return True
 
     def add_camera_frame(self, camera_observation: CameraObservation, obstacle_name: str):
         """Add camera frame to the world collision checker.
@@ -2651,7 +2684,8 @@ class MotionGen(MotionGenConfig):
                 the status of the start state.
         """
         joint_position = start_state.position
-
+        if self.rollout_fn.cuda_graph_instance:
+            log_error("Cannot check start state as this rollout_fn is used by a CUDA graph.")
         if len(joint_position.shape) == 1:
             joint_position = joint_position.unsqueeze(0)
         if len(joint_position.shape) > 2:
@@ -2938,7 +2972,7 @@ class MotionGen(MotionGenConfig):
                 result = MotionGenResult(
                     success=torch.as_tensor([False], device=self.tensor_args.device),
                     valid_query=valid_query,
-                    status="Invalid Hold Partial Pose",
+                    status=MotionGenStatus.INVALID_PARTIAL_POSE_COST_METRIC,
                 )
                 return result
         self.update_batch_size(seeds=solve_state.num_trajopt_seeds, batch=solve_state.batch_size)
@@ -3436,21 +3470,22 @@ class MotionGen(MotionGenConfig):
                     opt_dt = traj_result.optimized_dt
 
                     if plan_config.parallel_finetune:
-                        opt_dt = torch.min(opt_dt[traj_result.success])
                         seed_override = solve_state.num_trajopt_seeds * self.noisy_trajopt_seeds
+                        if self.optimize_dt:
+                            opt_dt = torch.min(opt_dt[traj_result.success])
 
                     finetune_time = 0
                     newton_iters = None
 
                     for k in range(plan_config.finetune_attempts):
-
-                        scaled_dt = torch.clamp(
-                            opt_dt
-                            * plan_config.finetune_dt_scale
-                            * (plan_config.finetune_dt_decay ** (k)),
-                            self.trajopt_solver.minimum_trajectory_dt,
-                        )
                         if self.optimize_dt:
+
+                            scaled_dt = torch.clamp(
+                                opt_dt
+                                * plan_config.finetune_dt_scale
+                                * (plan_config.finetune_dt_decay ** (k)),
+                                self.trajopt_solver.minimum_trajectory_dt,
+                            )
                             self.finetune_trajopt_solver.update_solver_dt(scaled_dt.item())
 
                         traj_result = self._solve_trajopt_from_solve_state(
@@ -3484,7 +3519,14 @@ class MotionGen(MotionGenConfig):
             result.success = traj_result.success
 
             if plan_config.enable_finetune_trajopt and torch.count_nonzero(result.success) == 0:
+
                 result.status = MotionGenStatus.FINETUNE_TRAJOPT_FAIL
+                if (
+                    traj_result.debug_info is not None
+                    and "dt_exception" in traj_result.debug_info
+                    and traj_result.debug_info["dt_exception"]
+                ):
+                    result.status = MotionGenStatus.DT_EXCEPTION
 
             result.interpolated_plan = traj_result.interpolated_solution.trim_trajectory(
                 0, traj_result.path_buffer_last_tstep[0]
@@ -3678,6 +3720,7 @@ class MotionGen(MotionGenConfig):
                     finetune_time = 0
                     newton_iters = None
                     for k in range(plan_config.finetune_attempts):
+
                         scaled_dt = torch.clamp(
                             opt_dt
                             * plan_config.finetune_js_dt_scale
@@ -3700,7 +3743,6 @@ class MotionGen(MotionGenConfig):
                         finetune_time += traj_result.solve_time
                         if torch.count_nonzero(traj_result.success) > 0 or not self.optimize_dt:
                             break
-
                         seed_traj = traj_result.optimized_seeds.detach().clone()
                         newton_iters = 4
 
@@ -3711,6 +3753,13 @@ class MotionGen(MotionGenConfig):
                     result.debug_info["finetune_trajopt_result"] = traj_result
                 if torch.count_nonzero(traj_result.success) == 0:
                     result.status = MotionGenStatus.FINETUNE_TRAJOPT_FAIL
+                    if (
+                        traj_result.debug_info is not None
+                        and "dt_exception" in traj_result.debug_info
+                        and traj_result.debug_info["dt_exception"]
+                    ):
+                        result.status = MotionGenStatus.DT_EXCEPTION
+
             elif plan_config.enable_finetune_trajopt:
                 traj_result.success = traj_result.success[0:1]
             result.solve_time += traj_result.solve_time + result.finetune_time

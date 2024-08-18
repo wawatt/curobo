@@ -18,9 +18,9 @@ import torch
 import warp as wp
 
 # CuRobo
-from curobo.util.logger import log_error
+from curobo.util.logger import log_error, log_warn
 from curobo.util.torch_utils import get_cache_fn_decorator, get_torch_jit_decorator
-from curobo.util.warp import init_warp
+from curobo.util.warp import init_warp, is_runtime_warp_kernel_enabled, warp_support_kernel_key
 
 # Local Folder
 from .cost_base import CostBase, CostConfig
@@ -224,7 +224,13 @@ def make_l2_kernel(dof_template: int):
             for i in range(dof_template):
                 out_grad_p[b_addrs + i] = g_p[i]
 
-    return wp.Kernel(forward_l2_loop_warp)
+    module = wp.get_module(forward_l2_loop_warp.__module__)
+    key = "forward_l2_loop" + str(dof_template)
+    if key in module.kernels:
+        new_kernel = module.kernels[key]
+    else:
+        new_kernel = wp.Kernel(forward_l2_loop_warp, key=key, module=module)
+    return new_kernel
 
 
 # create a bound cost tensor:
@@ -340,6 +346,15 @@ class DistCost(CostBase, DistCostConfig):
         self._init_post_config()
         init_warp()
         if self.use_l2_kernel:
+            if not is_runtime_warp_kernel_enabled():
+                log_warn("Runtime warp kernel generation is disabled.")
+                self.use_l2_kernel = False
+            if not warp_support_kernel_key():
+                # define a compile-time constant so that warp hash is different for different dof
+                # this is required in older warp versions < 1.2.1 as warp hash didn't consider the
+                # name of kernels. Newer warp versions have fixed this issue.
+                WARP_CUROBO_DISTCOST_DOF_GLOBAL_CONSTANT = wp.constant(self.dof)
+
             self._l2_dof_kernel = make_l2_kernel(self.dof)
 
     def _init_post_config(self):
@@ -393,7 +408,9 @@ class DistCost(CostBase, DistCostConfig):
         if self.terminal and self.run_weight is not None:
             if self._run_weight_vec is None or self._run_weight_vec.shape[1] != cost.shape[1]:
                 self._run_weight_vec = torch.ones(
-                    (1, cost.shape[1]), device=self.tensor_args.device, dtype=self.tensor_args.dtype
+                    (1, cost.shape[1]),
+                    device=self.tensor_args.device,
+                    dtype=self.tensor_args.dtype,
                 )
                 self._run_weight_vec[:, :-1] *= self.run_weight
         if RETURN_GOAL_DIST:
@@ -415,7 +432,9 @@ class DistCost(CostBase, DistCostConfig):
         if self.terminal and self.run_weight is not None:
             if self._run_weight_vec is None or self._run_weight_vec.shape[1] != cost.shape[1]:
                 self._run_weight_vec = torch.ones(
-                    (1, cost.shape[1]), device=self.tensor_args.device, dtype=self.tensor_args.dtype
+                    (1, cost.shape[1]),
+                    device=self.tensor_args.device,
+                    dtype=self.tensor_args.dtype,
                 )
                 self._run_weight_vec[:, :-1] *= self.run_weight
             cost = self._run_weight_vec * dist
