@@ -95,6 +95,8 @@ def join_path(path1: str, path2: str) -> str:
     else:
         return path2
 
+def join_tree(path1, path2):
+    return path1+"/"+path2
 
 def load_yaml(file_path: Union[str, Dict]) -> Dict:
     """Load yaml file and return as dictionary. If file_path is a dictionary, return as is.

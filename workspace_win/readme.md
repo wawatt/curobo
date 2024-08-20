@@ -8,8 +8,8 @@
 ```
 git lfs install
 ```
-3. modify for win11 OS (finished on this branch) 【official support win from v0.7.4】
-- src/curobo/curobolib/cpp/self_collision_kernel.cu, modify
+1. modify for win11 OS (finished on this branch) 
+- src/curobo/curobolib/cpp/self_collision_kernel.cu, modify 【official repo changed from v0.7.4】
     ```
     {.d = 0.0, .i = 0, .j = 0};
     ```
@@ -23,11 +23,11 @@ git lfs install
     def join_tree(path1, path2):
         return path1+"/"+path2
     ```
-4. build with log
+1. build with log
 ```
 pip install -e . --no-build-isolation --log log_install.txt
 ```
-5. verify that all unit tests pass
+1. verify that all unit tests pass
 ```
 pip install pytest
 python -m pytest . 
