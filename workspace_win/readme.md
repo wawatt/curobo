@@ -42,9 +42,10 @@ python -m pytest .
     ```
     set TORCH_CUDA_ARCH_LIST=8.6+PTX // for RTX 3050ti
     set TORCH_CUDA_ARCH_LIST=8.9+PTX // for RTX 4060ti
+    set DISTUTILS_USE_SDK=1
     set omni_python=/path/to/isaac_sim-4.0.0/python.bat
     %omni_python% -m pip install tomli wheel ninja
-    %omni_python% -m pip install -e .[isaacsim] --no-build-isolation --log log_install.txt
+    %omni_python% -m pip install -e .[isaacsim] --no-build-isolation --log log.log
     ```
     Don't worry about WARNING and pip's dependency errors
 
