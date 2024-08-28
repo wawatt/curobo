@@ -12,6 +12,8 @@ its affiliates is strictly prohibited.
 
 *CUDA Accelerated Robot Library*
 
+[for windows OS](workspace_win/readme.md)
+
 **Check [curobo.org](https://curobo.org) for installing and getting started with examples!**
 
 Use [Discussions](https://github.com/NVlabs/curobo/discussions) for questions on using this package.
